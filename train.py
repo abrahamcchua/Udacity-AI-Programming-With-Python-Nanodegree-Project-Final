@@ -7,10 +7,19 @@ from torchvision import transforms, datasets, models
 from torch import nn
 from torch import optim
 from torch.optim import lr_scheduler
-
+# Own modules
+from input_args import input_args_train
 
 class train():
-    def __init__(self, data_dir = "flowers", gpu = "default"):
+    def __init__(self, arguments):
+        data_dir = arguments.dir
+        self.save_dir = arguments.save_dir
+        self.arch = arguments.arch
+        self.lr = arguments.learning_rate
+        self.hlayer_one = arguments.hlayer_one
+        self.hlayer_two = arguments.hlayer_two
+        self.epochs = arguments.epochs
+        gpu = arguments.gpu
         self.train_dir = data_dir + '/train'
         self.valid_dir = data_dir + '/valid'
         self.test_dir = data_dir + '/test'
@@ -42,13 +51,13 @@ class train():
         "densenet201": models.densenet201
         }  
     
-    def module(self, pretrained_model):
+    def module(self):
         train_data_loader = self.train_data_loader()
         validation_data_loader = self.validation_data_loader()
         test_data_loader = self.test_data_loader()
-        model = self.model_architecture(pretrained_model)
-        trained_model = self.trainer(model, train_data_loader, validation_data_loader, self.loss_func, pretrained_model)
-        self.tester(trained_model, pretrained_model, test_data_loader, self.loss_func)
+        model = self.model_architecture(self.arch, self.hlayer_one, self.hlayer_two)
+        trained_model = self.trainer(model, train_data_loader, validation_data_loader, self.loss_func, self.arch, epochs=self.epochs, lr=self.lr)
+        self.tester(trained_model, self.arch, test_data_loader, self.loss_func)
  
         
         
@@ -66,7 +75,7 @@ class train():
         return torch.utils.data.DataLoader(self.test_data, batch_size, shuffle=True)
    
         
-    def model_architecture(self, pretrained_model, hidden_layer_one=810, hidden_layer_two=270):
+    def model_architecture(self, pretrained_model, hidden_layer_one, hidden_layer_two):
         model = self.valid_pretrained_models.get(pretrained_model)(pretrained=True)
         for param in model.parameters():
             param.requires_grad = False
@@ -120,7 +129,7 @@ class train():
                         validation_loss += batch_loss.item()
                         # Calculate accuracy
                         ps = torch.exp(logps)
-                        top_p, top_class = ps.topk(1, dim=1)
+                        _, top_class = ps.topk(1, dim=1)
                         equals = top_class == label.view(*top_class.shape)
                         accuracy += torch.mean(equals.type(torch.FloatTensor)).item()
                 values = [epoch+1, training_loss, validation_loss, accuracy/len(validation_loader), (time.time()-start_time)/60]
@@ -140,7 +149,7 @@ class train():
         'class_to_idx': model.class_to_idx,
         }
 
-        torch.save(model_state, 'checkpoint-'+ pretrained_model +'.pth')
+        torch.save(model_state, self.save_dir+'checkpoint-'+ pretrained_model+"_e_"+str(epochs)+"_lr_"+str(lr)+'.pth')
         return model
     
     
@@ -162,7 +171,7 @@ class train():
                     
                     # Calculate accuracy
                     ps = torch.exp(logps)
-                    top_p, top_class = ps.topk(1, dim=1)
+                    _, top_class = ps.topk(1, dim=1)
                     equals = top_class == label.view(*top_class.shape)
                     accuracy += torch.mean(equals.type(torch.FloatTensor)).item()
                     
@@ -170,11 +179,13 @@ class train():
                     f"Test Accuracy: {accuracy/len(test_loader):.4f}")
             values = [test_loss/len(test_loader), accuracy/len(test_loader), (time.time()-start_time)/60]
             writer.writerow(values)
-    
-
-
-# sample = train()
-# sample.module("densenet161")
-        
+            
+            
+            
+if __name__ == "__main__":
+    arguments = input_args_train()
+    trainer = train(arguments)
+    trainer.module()
+            
 
 

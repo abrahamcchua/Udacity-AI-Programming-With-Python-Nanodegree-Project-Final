@@ -3,34 +3,62 @@ import random
 import os
 import json
 import csv
+from torchvision import models, transforms
 # Python modules
 import torch
 from PIL import Image
 # Own modules
-from train import train
+from input_args import input_args_predict
 
-class predictor(train):
-    def __init__(self, data_dir = "flowers", gpu = "default"):
-        super().__init__(data_dir, gpu) 
-        self.checkpoint_path = "checkpoint-densenet161.pth"
-        
-    def module(self, topk):
-        test_data_loader = self.test_data_loader()
-        loaded_model = self.load_checkpoint(self.checkpoint_path)
+class predictor():
+    def __init__(self, predict_arguments):
+        # "checkpoint-densenet161_e_10_lr_0.01.pth"
+        self.checkpoint = predict_arguments.checkpoint
+        self.save_dir = predict_arguments.save_dir
+        self.checkpoint_path = predict_arguments.save_dir + "/" + predict_arguments.checkpoint
+        if predict_arguments.image == "random":
+            self.test_dir = "flowers/test/"
+            self.test_folder, self.img_loc = self.random_file_selector()
+        else:
+            self.test_dir = "flowers/test/"
+            self.test_folder = predict_arguments.image.split("/")[2]
+            self.img_loc = predict_arguments.image.split("/")[3]
+        self.topk = predict_arguments.topk
+        self.category_names = predict_arguments.category_names
+        gpu = predict_arguments.gpu
+        if gpu == "default":
+            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = torch.device(gpu)
+        self.valid_pretrained_models = {
+        "densenet121": models.densenet121,
+        "densenet161": models.densenet161,
+        "densenet169": models.densenet169,
+        "densenet201": models.densenet201
+        } 
+        self.eval_transforms = transforms.Compose([transforms.Resize(255),
+                                                   transforms.CenterCrop(224),
+                                                   transforms.ToTensor(),
+                                                   transforms.Normalize([0.485, 0.456, 0.406],
+                                                                        [0.229, 0.224, 0.225])
+                                                  ])  
+    
+    def module(self):
+        loaded_model = self.load_checkpoint(self.save_dir, self.checkpoint)
         loaded_model.to(self.device);
-        self.tester(loaded_model, "imported_" + self.checkpoint_path.split("-")[1][:-4], test_data_loader, self.loss_func)
-        cat_to_name = self.category_label_importer()
-        test_folder, img_loc = self.random_file_selector()
-        processed_image = self.image_processor(img_loc)
+        cat_to_name = self.category_label_importer(self.category_names)
+        os.chdir("/home/workspace/ImageClassifier/" + self.test_dir + "/" + self.test_folder)
+        processed_image = self.image_processor(self.img_loc)
         top_classes, probabilities = self.predict(loaded_model, processed_image)
         model_classes = loaded_model.class_to_idx
         topk_class_list = self.cnumber_to_class(top_classes, model_classes, cat_to_name)
-        self.output(cat_to_name, topk, test_folder, topk_class_list, probabilities)
+        self.output(cat_to_name, self.topk, self.test_folder, topk_class_list, probabilities)
         
         
-    def load_checkpoint(self, file):
+    def load_checkpoint(self, save_dir, file):
+        os.chdir("/home/workspace/ImageClassifier/" + save_dir)
         model_state = torch.load(file)
-        loaded_model = self.valid_pretrained_models.get(file.split("-")[1][:-4])(pretrained=True)
+        loaded_model = self.valid_pretrained_models.get(file.split("-")[1][:11])(pretrained=True)
         loaded_model.classifier = model_state['classifier']
         loaded_model.load_state_dict(model_state['state_dict'])
         loaded_model.class_to_idx = model_state['class_to_idx']
@@ -79,7 +107,7 @@ class predictor(train):
         return top_classes, probabilities
     
         
-    def category_label_importer(self, file="cat_to_name.json"):
+    def category_label_importer(self, file):
         os.chdir("/home/workspace/ImageClassifier")
         with open(file, 'r') as f:
             return json.load(f)
@@ -110,6 +138,10 @@ class predictor(train):
         
     
 
-        
-classifier = predictor()
-classifier.module(5)
+if __name__ == '__main__':
+    arguments = input_args_predict()        
+    classifier = predictor(arguments)
+    classifier.module()
+    
+
+# python predict.py --checkpoint checkpoint-densenet201_e_10_lr_0.01.pth --image flowers/test/50/image_06297.jpg
