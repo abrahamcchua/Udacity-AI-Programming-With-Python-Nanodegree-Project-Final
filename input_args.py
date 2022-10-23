@@ -6,7 +6,7 @@ def input_args_train():
     # Argument #1: Path to Data Folder
     parser.add_argument('--dir', type=str, help='path to the folder of pet images', required=True) 
     # Argument #2: Path to the save directory
-    parser.add_argument('--save_dir', type=str, default=None, help ='path to the save directory')
+    parser.add_argument('--save_dir', type=str, default="checkpoints", help ='path to the save directory')
     # Argument #3: Model Architechture to be used
     parser.add_argument('--arch', type=str, default='densenet161', help='type of densenet to be used')
     # Argument #4: Learning rate of the model
@@ -34,5 +34,5 @@ def input_args_predict():
     # Argument #5: Determines if a gpu will be used for the inference
     parser.add_argument('--gpu', type=str, default="default", help='device that the inference will use')
     # Argument #6: Path to the save directory
-    parser.add_argument('--save_dir', type=str, default=None, help ='path to the save directory')
+    parser.add_argument('--save_dir', type=str, default="checkpoints", help ='path to the save directory')
     return parser.parse_args()
